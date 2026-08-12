@@ -362,7 +362,6 @@ function Participant() {
           </div>
         </>}
       </div>
-      <Taskbar mode="participant" />
     </main>
   );
 }

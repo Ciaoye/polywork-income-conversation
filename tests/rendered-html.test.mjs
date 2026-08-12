@@ -33,9 +33,11 @@ test("renders participant and host presentation shells", async () => {
   const hostHtml = await hostResponse.text();
   assert.match(joinHtml, /共同回答/);
   assert.match(joinHtml, /正在进入现场/);
+  assert.doesNotMatch(joinHtml, /class="taskbar"/);
   assert.match(hostHtml, /主持控制台/);
   assert.match(hostHtml, /全屏展示/);
   assert.match(hostHtml, /可以继续聊/);
+  assert.match(hostHtml, /class="taskbar"/);
 });
 
 test("ships an absolute share-card URL derived from the request host", async () => {
