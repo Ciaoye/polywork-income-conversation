@@ -61,11 +61,14 @@ async function ensureSchema() {
   ]);
 }
 
-async function snapshot(participantId = "") {
+async function snapshot(participantId = "", requestedQuestion?: number) {
   await ensureSchema();
   const database = db();
   const state = await database.prepare("SELECT * FROM event_state WHERE id = 1").first<EventRow>();
-  const index = Math.max(0, Math.min(questions.length - 1, state?.active_question ?? 0));
+  const activeQuestion = Math.max(0, Math.min(questions.length - 1, state?.active_question ?? 0));
+  const index = Number.isInteger(requestedQuestion)
+    ? Math.max(0, Math.min(questions.length - 1, requestedQuestion as number))
+    : activeQuestion;
   const question = questions[index];
   const result = await database.prepare(`SELECT r.*, COUNT(x.participant_id) AS reaction_count
     FROM responses r LEFT JOIN reactions x ON x.response_id = r.id
@@ -81,7 +84,8 @@ async function snapshot(participantId = "") {
   }
 
   return {
-    state: { activeQuestion: index, revealAnswers: Boolean(state?.reveal_answers), updatedAt: state?.updated_at },
+    state: { activeQuestion, revealAnswers: Boolean(state?.reveal_answers), updatedAt: state?.updated_at },
+    questionIndex: index,
     question,
     totalQuestions: questions.length,
     responses: result.results.map((row) => ({
@@ -101,8 +105,10 @@ async function snapshot(participantId = "") {
 
 export async function GET(request: Request) {
   try {
-    const participantId = new URL(request.url).searchParams.get("participant") ?? "";
-    return Response.json(await snapshot(participantId));
+    const search = new URL(request.url).searchParams;
+    const participantId = search.get("participant") ?? "";
+    const requestedQuestion = search.has("question") ? Number(search.get("question")) : undefined;
+    return Response.json(await snapshot(participantId, requestedQuestion));
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "读取失败" }, { status: 500 });
   }
@@ -156,7 +162,8 @@ export async function POST(request: Request) {
     } else {
       return Response.json({ error: "未知操作" }, { status: 400 });
     }
-    return Response.json(await snapshot(String(body.participantId ?? "")));
+    const requestedQuestion = body.viewQuestionIndex === undefined ? undefined : Number(body.viewQuestionIndex);
+    return Response.json(await snapshot(String(body.participantId ?? ""), requestedQuestion));
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "操作失败" }, { status: 500 });
   }

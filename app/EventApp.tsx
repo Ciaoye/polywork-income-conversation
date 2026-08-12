@@ -22,13 +22,16 @@ type EventResponse = {
 type Snapshot = {
   state: { activeQuestion: number; revealAnswers: boolean; updatedAt?: string };
   question: Question;
+  questionIndex: number;
   totalQuestions: number;
   responses: EventResponse[];
+  joinUrl?: string;
 };
 
 const emptySnapshot: Snapshot = {
   state: { activeQuestion: 0, revealAnswers: true },
   question: questions[0],
+  questionIndex: 0,
   totalQuestions: questions.length,
   responses: [],
 };
@@ -44,13 +47,26 @@ async function sendAction(payload: Record<string, unknown>) {
   return data;
 }
 
-function useSnapshot(participantId: string) {
+async function sendHostAction(payload: Record<string, unknown>) {
+  const response = await fetch("/api/host-action", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = (await response.json()) as Snapshot & { error?: string };
+  if (!response.ok) throw new Error(data.error || "主持操作没有完成");
+  return data;
+}
+
+function useSnapshot(participantId: string, endpoint = "/api/event", questionIndex?: number) {
   const [snapshot, setSnapshot] = useState<Snapshot>(emptySnapshot);
   const [error, setError] = useState("");
   const [ready, setReady] = useState(false);
   const refresh = useCallback(async () => {
     try {
-      const response = await fetch(`/api/event?participant=${encodeURIComponent(participantId)}`, { cache: "no-store" });
+      const params = new URLSearchParams({ participant: participantId });
+      if (questionIndex !== undefined) params.set("question", String(questionIndex));
+      const response = await fetch(`${endpoint}?${params.toString()}`, { cache: "no-store" });
       const data = (await response.json()) as Snapshot & { error?: string };
       if (!response.ok) throw new Error(data.error || "暂时无法连接现场");
       setSnapshot(data);
@@ -59,7 +75,7 @@ function useSnapshot(participantId: string) {
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "暂时无法连接现场");
     }
-  }, [participantId]);
+  }, [endpoint, participantId, questionIndex]);
 
   useEffect(() => {
     const initial = window.setTimeout(() => void refresh(), 0);
@@ -253,12 +269,19 @@ function SpectrumSummary({ responses }: { responses: EventResponse[] }) {
 
 function Participant() {
   const [participantId] = useState(getParticipantId);
-  const { snapshot, setSnapshot, error, ready } = useSnapshot(participantId);
+  const [selectedQuestion, setSelectedQuestion] = useState<number | undefined>(undefined);
+  const { snapshot, setSnapshot, error, ready } = useSnapshot(participantId, "/api/event", selectedQuestion);
   const [form, setForm] = useState<AnswerData>(initialData(snapshot.question));
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const hydratedRef = useRef("");
   const own = snapshot.responses.find((response) => response.participantId === participantId);
+
+  useEffect(() => {
+    if (!ready || selectedQuestion !== undefined) return;
+    const timer = window.setTimeout(() => setSelectedQuestion(snapshot.questionIndex), 0);
+    return () => window.clearTimeout(timer);
+  }, [ready, selectedQuestion, snapshot.questionIndex]);
 
   useEffect(() => {
     const key = `${snapshot.question.id}:${own?.updatedAt ?? "new"}`;
@@ -270,14 +293,14 @@ function Participant() {
   }, [snapshot.question, own]);
 
   const act = async (payload: Record<string, unknown>) => {
-    setSnapshot(await sendAction(payload));
+    setSnapshot(await sendAction({ ...payload, viewQuestionIndex: snapshot.questionIndex }));
   };
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!participantId) return;
     setSaving(true);
     try {
-      setSnapshot(await sendAction({ action: "submit", participantId, questionId: snapshot.question.id, data: form }));
+      setSnapshot(await sendAction({ action: "submit", participantId, questionId: snapshot.question.id, data: form, viewQuestionIndex: snapshot.questionIndex }));
       setSaved(true);
     } finally {
       setSaving(false);
@@ -289,11 +312,28 @@ function Participant() {
       <div className="mobile-shell">
         <header className="mobile-header">
           <Link href="/" aria-label="返回活动首页">✦</Link>
-          <div><b>共同回答</b><span>{snapshot.state.activeQuestion + 1} / {snapshot.totalQuestions}</span></div>
+          <div><b>共同回答</b><span>我在第 {snapshot.questionIndex + 1} 题 / 共 {snapshot.totalQuestions} 题</span></div>
           <span className={`live-pill ${error ? "offline" : ""}`}>{error ? "重连中" : "LIVE"}</span>
         </header>
-        <div className="progress-track"><span style={{ width: `${((snapshot.state.activeQuestion + 1) / snapshot.totalQuestions) * 100}%` }} /></div>
+        <div className="progress-track"><span style={{ width: `${((snapshot.questionIndex + 1) / snapshot.totalQuestions) * 100}%` }} /></div>
         {!ready ? <div className="connecting win-outset">正在进入现场……</div> : <>
+          <nav className="participant-question-nav win-outset" aria-label="选择要回答的问题">
+            <div className="participant-question-nav-copy">
+              <b>你可以自由选择回答哪一题</b>
+              <span>主持人切题不会打断你正在写的内容</span>
+            </div>
+            <div className="participant-question-picker">
+              {questions.map((question, index) => (
+                <button
+                  className={index === snapshot.questionIndex ? "active" : ""}
+                  key={question.id}
+                  type="button"
+                  onClick={() => setSelectedQuestion(index)}
+                  aria-label={`查看第 ${index + 1} 题：${question.title}`}
+                >{index + 1}</button>
+              ))}
+            </div>
+          </nav>
           <section className="participant-question">
             <p className="question-eyebrow">{snapshot.question.number} / {snapshot.question.eyebrow}</p>
             <h1>{snapshot.question.title}</h1>
@@ -316,6 +356,10 @@ function Participant() {
                 {!snapshot.responses.some((response) => !response.hidden) ? <p className="empty-copy">这里还是空的。也许你会写下第一句。</p> : null}
               </div>}
           </section>
+          <div className="participant-step-nav">
+            <button className="os-button" type="button" disabled={snapshot.questionIndex === 0} onClick={() => setSelectedQuestion(snapshot.questionIndex - 1)}>← 上一题</button>
+            <button className="os-button primary" type="button" disabled={snapshot.questionIndex === snapshot.totalQuestions - 1} onClick={() => setSelectedQuestion(snapshot.questionIndex + 1)}>下一题 →</button>
+          </div>
         </>}
       </div>
       <Taskbar mode="participant" />
@@ -350,57 +394,25 @@ function QuestionFields({ question, form, setForm }: { question: Question; form:
 }
 
 function Host() {
-  const { snapshot, setSnapshot, error, ready } = useSnapshot("host");
+  const { snapshot, setSnapshot, error, ready } = useSnapshot("host", "/api/host-action");
   const [qr, setQr] = useState("");
   const [joinUrl, setJoinUrl] = useState("");
-  const [hostKey, setHostKey] = useState("");
-  const [hostKeyDraft, setHostKeyDraft] = useState("");
   const [hostError, setHostError] = useState("");
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setJoinUrl(`${window.location.origin}/join`);
-    }, 0);
+    if (!snapshot.joinUrl) return;
+    const timer = window.setTimeout(() => setJoinUrl(snapshot.joinUrl ?? ""), 0);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [snapshot.joinUrl]);
   useEffect(() => {
     if (!joinUrl) return;
     void QRCode.toDataURL(joinUrl, { width: 260, margin: 1, color: { dark: "#271744", light: "#ffffff" } }).then(setQr);
   }, [joinUrl]);
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const url = new URL(window.location.href);
-      const supplied = url.searchParams.get("key") || window.sessionStorage.getItem("polywork-host-key") || "";
-      if (supplied) {
-        setHostKey(supplied);
-        setHostKeyDraft(supplied);
-        window.sessionStorage.setItem("polywork-host-key", supplied);
-      }
-      if (url.searchParams.has("key")) {
-        url.searchParams.delete("key");
-        window.history.replaceState({}, "", url.pathname + url.search + url.hash);
-      }
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, []);
   const act = async (payload: Record<string, unknown>) => {
     try {
-      setSnapshot(await sendAction({ ...payload, hostKey }));
+      setSnapshot(await sendHostAction(payload));
       setHostError("");
     } catch (nextError) {
       setHostError(nextError instanceof Error ? nextError.message : "主持操作没有完成");
-    }
-  };
-  const unlockHost = async (event: React.FormEvent) => {
-    event.preventDefault();
-    const nextKey = hostKeyDraft.trim();
-    try {
-      const next = await sendAction({ action: "setReveal", value: snapshot.state.revealAnswers, hostKey: nextKey });
-      setSnapshot(next);
-      setHostKey(nextKey);
-      window.sessionStorage.setItem("polywork-host-key", nextKey);
-      setHostError("");
-    } catch (nextError) {
-      setHostError(nextError instanceof Error ? nextError.message : "主持人口令不正确");
     }
   };
   const visibleResponses = useMemo(() => snapshot.responses.filter((response) => !response.hidden), [snapshot.responses]);
@@ -442,13 +454,6 @@ function Host() {
               <input className="join-url-input win-inset" aria-label="参与者网址" value={joinUrl} onChange={(event) => setJoinUrl(event.target.value)} />
               {joinUrl.includes("localhost") ? <p className="network-warning">手机无法打开 localhost。现场使用时，请把这里换成这台电脑的局域网网址。</p> : null}
               <div className="control-divider" />
-              {!hostKey ? <form className="host-unlock" onSubmit={unlockHost}>
-                <label htmlFor="host-key">主持人口令</label>
-                <input id="host-key" className="join-url-input win-inset" type="password" autoComplete="current-password" value={hostKeyDraft} onChange={(event) => setHostKeyDraft(event.target.value)} />
-                <button className="os-button primary wide-button" type="submit">解锁主持控制</button>
-                {hostError ? <p className="host-error">{hostError}</p> : null}
-              </form> : <p className="host-unlocked">✓ 主持控制已解锁</p>}
-              <div className="control-divider" />
               <p className="control-label">当前问题</p>
               <div className="question-picker">
                 {questions.map((question, index) => <button className={index === snapshot.state.activeQuestion ? "active" : ""} key={question.id} onClick={() => act({ action: "setQuestion", index })} title={question.title}>{question.number}</button>)}
@@ -458,7 +463,7 @@ function Host() {
                 <button className="os-button primary" disabled={snapshot.state.activeQuestion === snapshot.totalQuestions - 1} onClick={() => act({ action: "setQuestion", index: snapshot.state.activeQuestion + 1 })}>下一题 →</button>
               </div>
               <button className="os-button wide-button" onClick={() => act({ action: "setReveal", value: !snapshot.state.revealAnswers })}>{snapshot.state.revealAnswers ? "◉ 暂时收起所有回答" : "◎ 展示所有回答"}</button>
-              {hostError && hostKey ? <p className="host-error">{hostError}</p> : null}
+              {hostError ? <p className="host-error">{hostError}</p> : null}
               <div className="control-divider" />
               <details className="discussion-prompts" open>
                 <summary>可以继续聊</summary>
