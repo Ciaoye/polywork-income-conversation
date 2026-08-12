@@ -1,8 +1,8 @@
 "use client";
+/* eslint-disable @next/next/no-html-link-for-pages -- vinext RSC prefetch crashes on deployed internal links */
 
 import QRCode from "qrcode";
 import Image from "next/image";
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { questions, type Question } from "../lib/questions";
 
@@ -111,7 +111,7 @@ function Taskbar({ mode }: { mode: Mode }) {
   }, []);
   return (
     <footer className="taskbar">
-      <Link className="start-button win-outset" href="/" prefetch={false}><span className="start-orb">✦</span><b>开始</b></Link>
+      <a className="start-button win-outset" href="/"><span className="start-orb">✦</span><b>开始</b></a>
       <span className="task-divider" />
       <div className="active-task win-outset">{mode === "host" ? "主持展示" : mode === "participant" ? "共同回答" : "活动说明"}</div>
       <div className="tray win-inset"><span className="signal-dot" /> LIVE&nbsp;&nbsp;{clock}</div>
@@ -311,7 +311,7 @@ function Participant() {
     <main className="desktop participant-desktop">
       <div className="mobile-shell">
         <header className="mobile-header">
-          <Link href="/" prefetch={false} aria-label="返回活动首页">✦</Link>
+          <a href="/" aria-label="返回活动首页">✦</a>
           <div><b>共同回答</b><span>我在第 {snapshot.questionIndex + 1} 题 / 共 {snapshot.totalQuestions} 题</span></div>
           <span className={`live-pill ${error ? "offline" : ""}`}>{error ? "重连中" : "LIVE"}</span>
         </header>
