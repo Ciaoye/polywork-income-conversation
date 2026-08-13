@@ -6,13 +6,14 @@ const app = cloudbase.init({ env: cloudbase.SYMBOL_DEFAULT_ENV });
 const db = app.database();
 const collection = db.collection("polywork_events");
 const questionIds = [
+  "self-introduction",
   "income-map",
   "choice-spectrum",
+  "earning-story",
   "body-memory",
-  "solo-company",
   "one-year-buffer",
+  "solo-company",
   "valuable-thing",
-  "self-introduction",
   "enough",
   "new-default",
 ];

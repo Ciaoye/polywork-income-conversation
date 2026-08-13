@@ -21,7 +21,7 @@ test("renders the activity landing page with both live entry points", async () =
   assert.match(html, /一场关于多元工作、多元收入/);
   assert.match(html, /href="\/join"/);
   assert.match(html, /href="\/host"/);
-  assert.match(html, /九个问题/);
+  assert.match(html, /十个问题/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 

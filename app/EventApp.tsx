@@ -150,7 +150,7 @@ function Landing() {
       <div className="desktop-icons" aria-label="快速入口">
         <a href="/join" className="desktop-icon"><span className="pixel-icon">✎</span><span>加入讨论</span></a>
         <a href="/host" className="desktop-icon"><span className="pixel-icon">▣</span><span>主持展示</span></a>
-        <a href="#questions" className="desktop-icon"><span className="pixel-icon">?</span><span>九个问题</span></a>
+        <a href="#questions" className="desktop-icon"><span className="pixel-icon">?</span><span>十个问题</span></a>
       </div>
 
       <WindowFrame title="多元工作与收入探索.exe" className="hero-window">
@@ -181,7 +181,7 @@ function Landing() {
       </aside>
 
       <section className="question-map" id="questions">
-        <WindowFrame title="九个问题 — 从生存现场走向新的默认答案">
+        <WindowFrame title="十个问题 — 从生存现场走向新的默认答案">
           <div className="question-list">
             {questions.map((question) => (
               <div className="question-file" key={question.id}>
@@ -222,6 +222,7 @@ function getParticipantId() {
 function initialData(question: Question): AnswerData {
   if (question.type === "spectrum") return { value: 50, reason: "" };
   if (question.type === "dual") return { comfortable: "", tired: "" };
+  if (question.type === "earning") return { story: "", amount: "", again: "" };
   if (question.type === "poll") return { choice: "", note: "" };
   if (question.type === "value") return { value: "", ai: "" };
   return { text: "" };
@@ -230,6 +231,7 @@ function initialData(question: Question): AnswerData {
 function ResponseContent({ response, question }: { response: EventResponse; question: Question }) {
   const data = response.data;
   if (question.type === "dual") return <><p><b>舒服：</b>{String(data.comfortable || "—")}</p><p><b>真累：</b>{String(data.tired || "—")}</p></>;
+  if (question.type === "earning") return <><p><b>这件事：</b>{String(data.story || "—")}</p><p><b>赚了：</b>{String(data.amount || "—")}</p><p className="muted-line">还想再做吗：{String(data.again || "还没回答")}</p></>;
   if (question.type === "spectrum") return <><p className="spectrum-answer"><b>{Number(data.value) < 50 ? "更接近被逼无奈" : Number(data.value) > 50 ? "更接近主动选择" : "就在中间"}</b><span>{String(data.value)} / 100</span></p>{data.reason ? <p>{String(data.reason)}</p> : null}</>;
   if (question.type === "poll") return <><p><b>{String(data.choice || "未选择")}</b></p>{data.note ? <p>{String(data.note)}</p> : null}</>;
   if (question.type === "value") return <><p><b>最值钱：</b>{String(data.value || "—")}</p><p className="muted-line">AI：{String(data.ai || "还没判断")}</p></>;
@@ -396,6 +398,17 @@ function QuestionFields({ question, form, setForm }: { question: Question; form:
     <label><span>☺ 最近一次觉得“真舒服”</span><textarea value={String(form.comfortable ?? "")} onChange={(event) => update("comfortable", event.target.value)} placeholder="写一个具体的瞬间……" maxLength={1000} /></label>
     <label><span>☹ 最近一次觉得“真累”</span><textarea value={String(form.tired ?? "")} onChange={(event) => update("tired", event.target.value)} placeholder="也写一个具体的瞬间……" maxLength={1000} /></label>
   </div>;
+  if (question.type === "earning") return <>
+    <div className="dual-fields">
+      <label><span>这是什么活？为什么让你满意或觉得有趣？</span><textarea value={String(form.story ?? "")} onChange={(event) => update("story", event.target.value)} placeholder={question.placeholder} maxLength={1400} required /></label>
+      <label><span>这个活最后赚了多少钱？</span><textarea value={String(form.amount ?? "")} onChange={(event) => update("amount", event.target.value)} placeholder="可以写具体数字，也可以写一个大概范围" maxLength={300} /></label>
+    </div>
+    <p className="field-question">如果再有一次机会，你还想做吗？</p>
+    <div className="option-stack">{["还想再做", "看条件", "不太想", "不知道"].map((option) => <label className={`option-button ${form.again === option ? "selected" : ""}`} key={option}>
+      <input type="radio" name="again" value={option} checked={form.again === option} onChange={() => update("again", option)} />
+      <span className="radio-dot" />{option}
+    </label>)}</div>
+  </>;
   if (question.type === "spectrum") return <>
     <div className="range-labels"><span>被逼无奈</span><b>{String(form.value)}</b><span>主动选择</span></div>
     <input className="range-input" type="range" min="0" max="100" value={Number(form.value ?? 50)} onChange={(event) => update("value", Number(event.target.value))} />
@@ -410,7 +423,7 @@ function QuestionFields({ question, form, setForm }: { question: Question; form:
         <input type="radio" name={optionKey} value={option} checked={form[optionKey] === option} onChange={() => update(optionKey, option)} />
         <span className="radio-dot" />{option}
       </label>)}</div>
-      {question.type === "poll" ? <label className="field-label"><span>如果不用立刻赚钱，你想把时间拿去做什么？</span><textarea value={String(form.note ?? "")} onChange={(event) => update("note", event.target.value)} placeholder={question.placeholder} maxLength={1000} /></label> : null}
+      {question.type === "poll" ? <label className="field-label"><span>如果未来五年的生活费已经有了，你最想怎样重新分配时间？</span><textarea value={String(form.note ?? "")} onChange={(event) => update("note", event.target.value)} placeholder={question.placeholder} maxLength={1000} /></label> : null}
     </>;
   }
   return <label className="field-label"><span>你的回答</span><textarea value={String(form.text ?? "")} onChange={(event) => update("text", event.target.value)} placeholder={question.placeholder} maxLength={1400} required /></label>;
