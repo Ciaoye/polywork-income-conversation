@@ -1,0 +1,19 @@
+{
+  "$schema": "https://static.cloudbase.net/cli/cloudbaserc.schema.json",
+  "version": "2.0",
+  "envId": "agent2026-d5goi0noda51a261b",
+  "functionRoot": "cloudbase-functions",
+  "functions": [
+    {
+      "name": "polywork-event-api",
+      "runtime": "Nodejs20.19",
+      "handler": "index.main",
+      "timeout": 10,
+      "memorySize": 256,
+      "description": "多元工作与收入探索活动接口",
+      "envVariables": {
+        "PARTICIPANT_JOIN_URL": "https://agent2026-d5goi0noda51a261b-1446728973.tcloudbaseapp.com/polywork/"
+      }
+    }
+  ]
+}

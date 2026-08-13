@@ -14,16 +14,28 @@ function eventApiBase() {
   return runtimeValue("EVENT_API_BASE").replace(/\/$/, "");
 }
 
+function eventApiUrl() {
+  const explicit = runtimeValue("EVENT_API_URL");
+  const base = eventApiBase();
+  return explicit || (base ? `${base}/api/event` : "");
+}
+
+async function forwardJson(upstream: Response) {
+  return new Response(await upstream.arrayBuffer(), {
+    status: upstream.status,
+    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+  });
+}
+
 export async function GET(request: Request) {
   if (!localHostEnabled(request)) {
     return Response.json({ error: "主持控制只在本地开放" }, { status: 403 });
   }
-  const base = eventApiBase();
-  if (!base) return Response.json({ error: "本地主持端尚未连接公网活动" }, { status: 503 });
+  const apiUrl = eventApiUrl();
+  if (!apiUrl) return Response.json({ error: "本地主持端尚未连接公网活动" }, { status: 503 });
   const source = new URL(request.url);
-  const upstream = await fetch(`${base}/api/event?${source.searchParams.toString()}`, { cache: "no-store" });
-  const data = (await upstream.json()) as Record<string, unknown>;
-  return Response.json({ ...data, joinUrl: `${base}/join` }, { status: upstream.status });
+  const upstream = await fetch(`${apiUrl}?${source.searchParams.toString()}`, { cache: "no-store" });
+  return forwardJson(upstream);
 }
 
 export async function POST(request: Request) {
@@ -31,18 +43,17 @@ export async function POST(request: Request) {
     return Response.json({ error: "主持控制只在本地开放" }, { status: 403 });
   }
 
-  const base = eventApiBase();
+  const apiUrl = eventApiUrl();
   const hostKey = runtimeValue("HOST_KEY");
-  if (!base || !hostKey) {
+  if (!apiUrl || !hostKey) {
     return Response.json({ error: "本地主持端尚未连接公网活动" }, { status: 503 });
   }
 
   const payload = (await request.json()) as Record<string, unknown>;
-  const upstream = await fetch(`${base}/api/event`, {
+  const upstream = await fetch(apiUrl, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ ...payload, hostKey }),
   });
-  const data = (await upstream.json()) as Record<string, unknown>;
-  return Response.json({ ...data, joinUrl: `${base}/join` }, { status: upstream.status });
+  return forwardJson(upstream);
 }

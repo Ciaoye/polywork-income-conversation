@@ -1,8 +1,8 @@
 "use client";
 /* eslint-disable @next/next/no-html-link-for-pages -- vinext RSC prefetch crashes on deployed internal links */
+/* eslint-disable @next/next/no-img-element -- the QR code is a generated data URL and the component is also reused by the static participant build */
 
 import QRCode from "qrcode";
-import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { questions, type Question } from "../lib/questions";
 
@@ -36,15 +36,39 @@ const emptySnapshot: Snapshot = {
   responses: [],
 };
 
+declare global {
+  interface Window {
+    __POLYWORK_API_URL__?: string;
+  }
+}
+
+function participantApiEndpoint() {
+  if (typeof window === "undefined") return "/api/event";
+  return window.__POLYWORK_API_URL__ || "/api/event";
+}
+
+function normalizeSnapshot(data: Partial<Snapshot>): Snapshot {
+  const questionIndex = Math.max(0, Math.min(questions.length - 1, Number(data.questionIndex ?? data.state?.activeQuestion ?? 0)));
+  return {
+    ...emptySnapshot,
+    ...data,
+    state: { ...emptySnapshot.state, ...data.state },
+    question: data.question ?? questions[questionIndex],
+    questionIndex,
+    totalQuestions: data.totalQuestions ?? questions.length,
+    responses: data.responses ?? [],
+  };
+}
+
 async function sendAction(payload: Record<string, unknown>) {
-  const response = await fetch("/api/event", {
+  const response = await fetch(participantApiEndpoint(), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
   });
-  const data = (await response.json()) as Snapshot & { error?: string };
+  const data = (await response.json()) as Partial<Snapshot> & { error?: string };
   if (!response.ok) throw new Error(data.error || "操作没有完成");
-  return data;
+  return normalizeSnapshot(data);
 }
 
 async function sendHostAction(payload: Record<string, unknown>) {
@@ -53,9 +77,9 @@ async function sendHostAction(payload: Record<string, unknown>) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
   });
-  const data = (await response.json()) as Snapshot & { error?: string };
+  const data = (await response.json()) as Partial<Snapshot> & { error?: string };
   if (!response.ok) throw new Error(data.error || "主持操作没有完成");
-  return data;
+  return normalizeSnapshot(data);
 }
 
 function useSnapshot(participantId: string, endpoint = "/api/event", questionIndex?: number) {
@@ -67,9 +91,9 @@ function useSnapshot(participantId: string, endpoint = "/api/event", questionInd
       const params = new URLSearchParams({ participant: participantId });
       if (questionIndex !== undefined) params.set("question", String(questionIndex));
       const response = await fetch(`${endpoint}?${params.toString()}`, { cache: "no-store" });
-      const data = (await response.json()) as Snapshot & { error?: string };
+      const data = (await response.json()) as Partial<Snapshot> & { error?: string };
       if (!response.ok) throw new Error(data.error || "暂时无法连接现场");
-      setSnapshot(data);
+      setSnapshot(normalizeSnapshot(data));
       setError("");
       setReady(true);
     } catch (nextError) {
@@ -270,7 +294,7 @@ function SpectrumSummary({ responses }: { responses: EventResponse[] }) {
 function Participant() {
   const [participantId] = useState(getParticipantId);
   const [selectedQuestion, setSelectedQuestion] = useState<number | undefined>(undefined);
-  const { snapshot, setSnapshot, error, ready } = useSnapshot(participantId, "/api/event", selectedQuestion);
+  const { snapshot, setSnapshot, error, ready } = useSnapshot(participantId, participantApiEndpoint(), selectedQuestion);
   const [form, setForm] = useState<AnswerData>(initialData(snapshot.question));
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -448,7 +472,7 @@ function Host() {
         <aside className="host-sidebar">
           <WindowFrame title="主持控制台">
             <div className="control-body">
-              <div className="qr-block win-inset">{qr ? <Image src={qr} alt={`参与者入口二维码：${joinUrl}`} width={174} height={174} unoptimized /> : null}</div>
+              <div className="qr-block win-inset">{qr ? <img src={qr} alt={`参与者入口二维码：${joinUrl}`} width={174} height={174} /> : null}</div>
               <p className="join-label">扫码加入 · 无需注册</p>
               <input className="join-url-input win-inset" aria-label="参与者网址" value={joinUrl} onChange={(event) => setJoinUrl(event.target.value)} />
               {joinUrl.includes("localhost") ? <p className="network-warning">手机无法打开 localhost。现场使用时，请把这里换成这台电脑的局域网网址。</p> : null}
