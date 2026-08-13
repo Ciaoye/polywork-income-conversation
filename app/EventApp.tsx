@@ -191,7 +191,7 @@ function Landing() {
             ))}
           </div>
           <div className="closing-copy">
-            <p>我们不是来寻找一套新的成功模板。</p>
+            <p>我们先把每个人真实的经验放在一起。</p>
             <strong>未来的工作可能还没有名字，<br />但新的生活方式，已经零零碎碎地发生了。</strong>
           </div>
         </WindowFrame>
