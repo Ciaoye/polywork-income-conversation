@@ -36,8 +36,9 @@ test("renders participant and host presentation shells", async () => {
   assert.doesNotMatch(joinHtml, /class="taskbar"/);
   assert.match(hostHtml, /主持控制台/);
   assert.match(hostHtml, /全屏展示/);
-  assert.match(hostHtml, /可以继续聊/);
-  assert.match(hostHtml, /class="taskbar"/);
+  assert.match(hostHtml, /未来的工作可能还没有名字/);
+  assert.match(hostHtml, /这场活动怎样进行/);
+  assert.doesNotMatch(hostHtml, /class="taskbar"/);
 });
 
 test("ships an absolute share-card URL derived from the request host", async () => {

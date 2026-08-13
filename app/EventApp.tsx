@@ -431,6 +431,7 @@ function QuestionFields({ question, form, setForm }: { question: Question; form:
 
 function Host() {
   const { snapshot, setSnapshot, error, ready } = useSnapshot("host", "/api/host-action");
+  const [showHome, setShowHome] = useState(true);
   const [qr, setQr] = useState("");
   const [joinUrl, setJoinUrl] = useState("");
   const [hostError, setHostError] = useState("");
@@ -451,6 +452,25 @@ function Host() {
       setHostError(nextError instanceof Error ? nextError.message : "主持操作没有完成");
     }
   };
+  const goToQuestion = async (index: number) => {
+    setShowHome(false);
+    await act({ action: "setQuestion", index });
+  };
+  const goPrevious = async () => {
+    if (showHome) return;
+    if (snapshot.state.activeQuestion === 0) {
+      setShowHome(true);
+      return;
+    }
+    await goToQuestion(snapshot.state.activeQuestion - 1);
+  };
+  const goNext = async () => {
+    if (showHome) {
+      await goToQuestion(0);
+      return;
+    }
+    await goToQuestion(snapshot.state.activeQuestion + 1);
+  };
   const visibleResponses = useMemo(() => snapshot.responses.filter((response) => !response.hidden), [snapshot.responses]);
 
   return (
@@ -459,27 +479,41 @@ function Host() {
         <section className="host-stage">
           <div className="host-topline">
             <span className={`live-pill ${error ? "offline" : ""}`}>{error ? "连接中断" : "现场同步中"}</span>
-            <span>{visibleResponses.length} 人已经回答</span>
+            <span>{showHome ? "先从我们为什么来到这里开始" : `${visibleResponses.length} 人已经回答`}</span>
             <button className="text-button" onClick={() => document.documentElement.requestFullscreen?.()}>全屏展示 ↗</button>
           </div>
-          <div className="host-question">
-            <p className="question-eyebrow">QUESTION {snapshot.question.number} / {snapshot.question.eyebrow}</p>
-            <h1>{snapshot.question.title}</h1>
-            <div className="host-intro">{snapshot.question.intro.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</div>
-            <blockquote>{snapshot.question.prompt}</blockquote>
-          </div>
+          {showHome ? <section className="host-home">
+            <p className="question-eyebrow">POLYWORK · INCOME · LIFE</p>
+            <h1>你在做什么？<br />怎么做？</h1>
+            <h2>一场关于多元工作、多元收入，以及我们正在怎样活着的聊天</h2>
+            <div className="host-home-copy">
+              <p>越来越难用一句“我是做什么的”来描述一个人了。有人还在公司里，同时接项目、做内容、做自己的产品；有人 gap、失业或主动离开公司；也有人做着许多无法被一个职业名称概括的小事。</p>
+              <p>这些变化不完全是主动选择。经济环境、就业市场和 AI 正在一起改变工作的组织方式。一个人可以完成的事情变多了，原来由公司提供的收入、身份、客户、协作关系、保险与风险承担，也越来越多地落回个人身上。</p>
+              <p>所以，我们不准备歌颂某一种自由职业，也不急着预测 AI 会不会让人失业。我们想先把在场每个人真实的工作、收入、时间、选择、风险和关系摊开来看。</p>
+              <p>有人正在主动离开组织，有人正在寻找进入组织的机会；有人试验新的方式，也有人暂时掉在旧系统和新系统之间。这些状态都真实存在。</p>
+            </div>
+            <blockquote>未来的工作可能还没有名字，但新的生活方式，已经零零碎碎地发生了。</blockquote>
+            <button className="home-start-button os-button primary" type="button" onClick={() => void goToQuestion(0)}>从第 01 题开始 →</button>
+          </section> : <>
+            <div className="host-question">
+              <p className="question-eyebrow">QUESTION {snapshot.question.number} / {snapshot.question.eyebrow}</p>
+              <h1>{snapshot.question.title}</h1>
+              <div className="host-intro">{snapshot.question.intro.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</div>
+              <blockquote>{snapshot.question.prompt}</blockquote>
+            </div>
 
-          <section className="host-results">
-            <div className="section-heading host-heading"><div><span>COLLECTIVE RESPONSES</span><h2>{snapshot.state.revealAnswers ? "大家的回答正在长出来" : "先各自想一想"}</h2></div><b>{visibleResponses.length} 条</b></div>
-            {!snapshot.state.revealAnswers ? <div className="answers-closed large win-inset">回答暂时藏起来了。<br /><small>主持人可以在大家提交后一起揭晓。</small></div> : <>
-              {snapshot.question.type === "spectrum" ? <SpectrumSummary responses={snapshot.responses} /> : null}
-              {snapshot.question.type === "poll" || snapshot.question.type === "value" ? <PollSummary question={snapshot.question} responses={snapshot.responses} /> : null}
-              <div className="response-grid host-grid">
-                {snapshot.responses.map((response) => <ResponseCard key={response.id} response={response} question={snapshot.question} participantId="host" host onAction={act} />)}
-                {!snapshot.responses.length ? <div className="empty-stage">等待第一条回答<span className="blink-cursor">▮</span></div> : null}
-              </div>
-            </>}
-          </section>
+            <section className="host-results">
+              <div className="section-heading host-heading"><div><span>COLLECTIVE RESPONSES</span><h2>{snapshot.state.revealAnswers ? "大家的回答正在长出来" : "先各自想一想"}</h2></div><b>{visibleResponses.length} 条</b></div>
+              {!snapshot.state.revealAnswers ? <div className="answers-closed large win-inset">回答暂时藏起来了。<br /><small>主持人可以在大家提交后一起揭晓。</small></div> : <>
+                {snapshot.question.type === "spectrum" ? <SpectrumSummary responses={snapshot.responses} /> : null}
+                {snapshot.question.type === "poll" || snapshot.question.type === "value" ? <PollSummary question={snapshot.question} responses={snapshot.responses} /> : null}
+                <div className="response-grid host-grid">
+                  {snapshot.responses.map((response) => <ResponseCard key={response.id} response={response} question={snapshot.question} participantId="host" host onAction={act} />)}
+                  {!snapshot.responses.length ? <div className="empty-stage">等待第一条回答<span className="blink-cursor">▮</span></div> : null}
+                </div>
+              </>}
+            </section>
+          </>}
         </section>
 
         <aside className="host-sidebar">
@@ -492,25 +526,29 @@ function Host() {
               <div className="control-divider" />
               <p className="control-label">当前问题</p>
               <div className="question-picker">
-                {questions.map((question, index) => <button className={index === snapshot.state.activeQuestion ? "active" : ""} key={question.id} onClick={() => act({ action: "setQuestion", index })} title={question.title}>{question.number}</button>)}
+                <button className={`home-picker-button ${showHome ? "active" : ""}`} type="button" onClick={() => setShowHome(true)}>首页</button>
+                {questions.map((question, index) => <button className={!showHome && index === snapshot.state.activeQuestion ? "active" : ""} key={question.id} onClick={() => void goToQuestion(index)} title={question.title}>{question.number}</button>)}
               </div>
               <div className="nav-controls">
-                <button className="os-button" disabled={snapshot.state.activeQuestion === 0} onClick={() => act({ action: "setQuestion", index: snapshot.state.activeQuestion - 1 })}>← 上一题</button>
-                <button className="os-button primary" disabled={snapshot.state.activeQuestion === snapshot.totalQuestions - 1} onClick={() => act({ action: "setQuestion", index: snapshot.state.activeQuestion + 1 })}>下一题 →</button>
+                <button className="os-button" disabled={showHome} onClick={() => void goPrevious()}>← {snapshot.state.activeQuestion === 0 ? "回首页" : "上一题"}</button>
+                <button className="os-button primary" disabled={!showHome && snapshot.state.activeQuestion === snapshot.totalQuestions - 1} onClick={() => void goNext()}>{showHome ? "开始 →" : "下一题 →"}</button>
               </div>
-              <button className="os-button wide-button" onClick={() => act({ action: "setReveal", value: !snapshot.state.revealAnswers })}>{snapshot.state.revealAnswers ? "◉ 暂时收起所有回答" : "◎ 展示所有回答"}</button>
+              {!showHome ? <button className="os-button wide-button" onClick={() => act({ action: "setReveal", value: !snapshot.state.revealAnswers })}>{snapshot.state.revealAnswers ? "◉ 暂时收起所有回答" : "◎ 展示所有回答"}</button> : null}
               {hostError ? <p className="host-error">{hostError}</p> : null}
               <div className="control-divider" />
               <details className="discussion-prompts" open>
-                <summary>可以继续聊</summary>
-                <ul>{snapshot.question.discussion.map((item) => <li key={item}>{item}</li>)}</ul>
+                <summary>{showHome ? "这场活动怎样进行" : "可以继续聊"}</summary>
+                <ul>{showHome ? <>
+                  <li>主持人提出问题，大家先在手机上同时思考和匿名回答。</li>
+                  <li>回答进入公共屏幕以后，我们一起寻找重复、差异和意外。</li>
+                  <li>先让观点出现，再邀请愿意的人把某条回答展开。</li>
+                </> : snapshot.question.discussion.map((item) => <li key={item}>{item}</li>)}</ul>
               </details>
-              {!ready ? <p className="control-status">正在准备现场数据……</p> : <p className="control-status">✓ 参与端会自动跟随切题</p>}
+              {!ready ? <p className="control-status">正在准备现场数据……</p> : <p className="control-status">✓ {showHome ? "准备好后，从第 01 题开始" : "参与者可自由选择题目"}</p>}
             </div>
           </WindowFrame>
         </aside>
       </div>
-      <Taskbar mode="host" />
     </main>
   );
 }
