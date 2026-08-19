@@ -79,14 +79,14 @@ export default function ArchiveApp() {
     <main className="archive-page">
       <header className="archive-header">
         <div className="archive-topline"><a href="/">← 回到活动首页</a><span>POLYWORK · INCOME · LIFE / ARCHIVE</span></div>
-        <p className="question-eyebrow">历史回答 · 只读展厅</p>
+        <p className="question-eyebrow">历史回答 · 现场回看</p>
         <h1>大家是怎么活着的？</h1>
         <p className="archive-lead">这里保存了活动现场留下的回答。它们按照十个问题重新排在一起，方便回看每个人的具体经验，也方便从重复出现的词语、差异和停顿里，继续理解这场讨论。</p>
         <div className="archive-stats">
           <div><b>{responses.length}</b><span>条回答</span></div>
           <div><b>{participants}</b><span>位参与者</span></div>
           <div><b>10</b><span>个问题</span></div>
-          <div><b>只读</b><span>不再请求现场 API</span></div>
+          <div><b>2026</b><span>现场记录</span></div>
         </div>
       </header>
 
@@ -119,7 +119,15 @@ export default function ArchiveApp() {
           const questionResponses = responses.filter((row) => row.questionId === question.id && matches(row));
           return <article className="archive-question" key={question.id}>
             <div className="archive-question-heading"><div><p className="question-eyebrow">{question.number} / {question.eyebrow}</p><h2>{question.title}</h2></div><b>{questionResponses.length} 条</b></div>
-            <p className="archive-interpretation">{interpretations[question.id]}</p>
+            <div className="archive-question-copy">
+              <div className="archive-question-intro">{question.intro.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</div>
+              <blockquote className="archive-question-prompt">{question.prompt}</blockquote>
+            </div>
+            <p className="archive-interpretation"><b>回看这组回答：</b>{interpretations[question.id]}</p>
+            <details className="archive-discussion">
+              <summary>这个问题还可以怎么继续聊</summary>
+              <ul>{question.discussion.map((item) => <li key={item}>{item}</li>)}</ul>
+            </details>
             <div className="archive-response-grid">
               {questionResponses.map((row) => <article className={`archive-response ${row.highlighted ? "is-highlighted" : ""}`} key={row._id}>
                 <div className="archive-response-meta"><span>{row.highlighted ? "★ 现场高亮" : "匿名回答"}</span><span>{formatDate(row.createdAt)}</span></div>
@@ -131,7 +139,7 @@ export default function ArchiveApp() {
           </article>;
         })}
       </section>
-      <footer className="archive-footer"><a href="/join">回到参与者入口</a><span>这是一份现场数据的只读展示，不会继续调用腾讯云接口。</span></footer>
+      <footer className="archive-footer"><a href="/join">回到参与者入口</a><span>按十个问题整理的现场回答、背景文字与讨论线索。</span></footer>
     </main>
   );
 }
