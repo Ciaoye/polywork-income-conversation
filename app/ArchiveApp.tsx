@@ -49,6 +49,7 @@ export default function ArchiveApp() {
   const [selected, setSelected] = useState("all");
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
+  const [expandedQuestions, setExpandedQuestions] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     fetch("/polywork-events.json")
@@ -117,6 +118,15 @@ export default function ArchiveApp() {
       <section className="archive-sections">
         {visibleQuestions.map((question) => {
           const questionResponses = responses.filter((row) => row.questionId === question.id && matches(row));
+          const orderedResponses = [...questionResponses].sort((left, right) => {
+            const reactionDifference = (reactions.get(right._id) || 0) - (reactions.get(left._id) || 0);
+            if (reactionDifference) return reactionDifference;
+            const highlightedDifference = Number(Boolean(right.highlighted)) - Number(Boolean(left.highlighted));
+            if (highlightedDifference) return highlightedDifference;
+            return String(left.createdAt || "").localeCompare(String(right.createdAt || ""));
+          });
+          const expanded = Boolean(expandedQuestions[question.id]);
+          const displayedResponses = expanded ? orderedResponses : orderedResponses.slice(0, 6);
           return <article className="archive-question" key={question.id}>
             <div className="archive-question-heading"><div><p className="question-eyebrow">{question.number} / {question.eyebrow}</p><h2>{question.title}</h2></div><b>{questionResponses.length} 条</b></div>
             <div className="archive-question-copy">
@@ -129,13 +139,14 @@ export default function ArchiveApp() {
               <ul>{question.discussion.map((item) => <li key={item}>{item}</li>)}</ul>
             </details>
             <div className="archive-response-grid">
-              {questionResponses.map((row) => <article className={`archive-response ${row.highlighted ? "is-highlighted" : ""}`} key={row._id}>
+              {displayedResponses.map((row) => <article className={`archive-response ${row.highlighted ? "is-highlighted" : ""}`} key={row._id}>
                 <div className="archive-response-meta"><span>{row.highlighted ? "★ 现场高亮" : "匿名回答"}</span><span>{formatDate(row.createdAt)}</span></div>
                 <p>{responseText(question, row.data!)}</p>
                 <div className="archive-response-foot"><span>◉ {reactions.get(row._id) || 0} 次回应</span><span>{row.updatedAt && row.updatedAt !== row.createdAt ? "有过修改" : ""}</span></div>
               </article>)}
               {!questionResponses.length ? <p className="archive-empty">没有匹配的回答。</p> : null}
             </div>
+            {orderedResponses.length > 6 ? <button className="archive-more-button" type="button" onClick={() => setExpandedQuestions((current) => ({ ...current, [question.id]: !expanded }))}>{expanded ? "收起回答 ↑" : `查看更多（还有 ${orderedResponses.length - 6} 条） ↓`}</button> : null}
           </article>;
         })}
       </section>
