@@ -5,6 +5,7 @@
 import QRCode from "qrcode";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { questions, type Question } from "../lib/questions";
+import { sitePath } from "../lib/site-paths";
 
 type Mode = "landing" | "participant" | "host";
 type AnswerData = Record<string, string | number>;
@@ -55,6 +56,7 @@ declare global {
   interface Window {
     __POLYWORK_API_URL__?: string;
     __POLYWORK_STATIC_DATA_URL__?: string;
+    __POLYWORK_BASE_URL__?: string;
   }
 }
 
@@ -204,7 +206,7 @@ function Taskbar({ mode }: { mode: Mode }) {
   }, []);
   return (
     <footer className="taskbar">
-      <a className="start-button win-outset" href="/"><span className="start-orb">✦</span><b>开始</b></a>
+      <a className="start-button win-outset" href={sitePath("/")}><span className="start-orb">✦</span><b>开始</b></a>
       <span className="task-divider" />
       <div className="active-task win-outset">{mode === "host" ? "主持展示" : mode === "participant" ? "共同回答" : "活动说明"}</div>
       <div className="tray win-inset"><span className="signal-dot" /> LIVE&nbsp;&nbsp;{clock}</div>
@@ -217,9 +219,9 @@ function Landing() {
     <main className="desktop landing-desktop">
       <div className="desktop-noise" />
       <div className="desktop-icons" aria-label="快速入口">
-        <a href="/join" className="desktop-icon"><span className="pixel-icon">✎</span><span>加入讨论</span></a>
-        <a href="/host" className="desktop-icon"><span className="pixel-icon">▣</span><span>主持展示</span></a>
-        <a href="/archive" className="desktop-icon"><span className="pixel-icon">▤</span><span>历史回答</span></a>
+        <a href={sitePath("/join")} className="desktop-icon"><span className="pixel-icon">✎</span><span>加入讨论</span></a>
+        <a href={sitePath("/host")} className="desktop-icon"><span className="pixel-icon">▣</span><span>主持展示</span></a>
+        <a href={sitePath("/archive")} className="desktop-icon"><span className="pixel-icon">▤</span><span>历史回答</span></a>
         <a href="#questions" className="desktop-icon"><span className="pixel-icon">?</span><span>十个问题</span></a>
       </div>
 
@@ -235,9 +237,9 @@ function Landing() {
             <p>这次我们不歌颂自由职业，也不急着预测 AI 会不会让人失业。我们先把每个人真实的工作、收入、时间、风险、选择和关系摊开来看。</p>
           </div>
           <div className="hero-actions">
-            <a className="os-button primary" href="/join">✎ 我来回答</a>
-            <a className="os-button" href="/host">▣ 打开主持屏</a>
-            <a className="os-button" href="/archive">▤ 查看历史回答</a>
+            <a className="os-button primary" href={sitePath("/join")}>✎ 我来回答</a>
+            <a className="os-button" href={sitePath("/host")}>▣ 打开主持屏</a>
+            <a className="os-button" href={sitePath("/archive")}>▤ 查看历史回答</a>
           </div>
           <p className="hero-note">先让观点出现，再决定哪些人需要说话。</p>
         </div>
@@ -411,7 +413,7 @@ function Participant() {
     <main className="desktop participant-desktop">
       <div className="mobile-shell">
         <header className="mobile-header">
-          <a href="/" aria-label="返回活动首页">✦</a>
+          <a href={sitePath("/")} aria-label="返回活动首页">✦</a>
           <div><b>共同回答</b><span>我在第 {snapshot.questionIndex + 1} 题 / 共 {snapshot.totalQuestions} 题</span></div>
           <div className="participant-header-actions">
             <span className={`live-pill ${error ? "offline" : ""}`}>{error ? "读取失败" : "已读取"}</span>

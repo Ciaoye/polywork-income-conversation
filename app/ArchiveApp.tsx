@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { questions, type Question } from "../lib/questions";
+import { sitePath } from "../lib/site-paths";
 
 type ArchiveRow = {
   _id: string;
@@ -52,7 +53,7 @@ export default function ArchiveApp() {
   const [expandedQuestions, setExpandedQuestions] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    fetch("/polywork-events.json")
+    fetch(typeof window === "undefined" ? "/polywork-events.json" : (window.__POLYWORK_STATIC_DATA_URL__ || sitePath("/polywork-events.json")))
       .then((response) => {
         if (!response.ok) throw new Error("历史数据文件暂时无法读取");
         return response.text();
@@ -79,7 +80,7 @@ export default function ArchiveApp() {
   return (
     <main className="archive-page">
       <header className="archive-header">
-        <div className="archive-topline"><a href="/">← 回到活动首页</a><span>POLYWORK · INCOME · LIFE / ARCHIVE</span></div>
+        <div className="archive-topline"><a href={sitePath("/")}>← 回到活动首页</a><span>POLYWORK · INCOME · LIFE / ARCHIVE</span></div>
         <p className="question-eyebrow">历史回答 · 现场回看</p>
         <h1>大家是怎么活着的？</h1>
         <p className="archive-lead">这里保存了活动现场留下的回答。它们按照十个问题重新排在一起，方便回看每个人的具体经验，也方便从重复出现的词语、差异和停顿里，继续理解这场讨论。</p>
@@ -150,7 +151,7 @@ export default function ArchiveApp() {
           </article>;
         })}
       </section>
-      <footer className="archive-footer"><a href="/join">回到参与者入口</a><span>按十个问题整理的现场回答、背景文字与讨论线索。</span></footer>
+      <footer className="archive-footer"><a href={sitePath("/join")}>回到参与者入口</a><span>按十个问题整理的现场回答、背景文字与讨论线索。</span></footer>
     </main>
   );
 }

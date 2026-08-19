@@ -40,4 +40,5 @@ yarn-error.log*
 /outputs/
 /work/
 /cloudbase-dist/
+/github-pages-dist/
 *.tsbuildinfo
