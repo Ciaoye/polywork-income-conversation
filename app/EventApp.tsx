@@ -90,7 +90,9 @@ function useSnapshot(participantId: string, endpoint = "/api/event", questionInd
     try {
       const params = new URLSearchParams({ participant: participantId });
       if (questionIndex !== undefined) params.set("question", String(questionIndex));
-      const response = await fetch(`${endpoint}?${params.toString()}`, { cache: "no-store" });
+      // Allow the short server/browser cache window to coalesce duplicate reads.
+      // Writes still return a fresh snapshot immediately through POST.
+      const response = await fetch(`${endpoint}?${params.toString()}`, { cache: "default" });
       const data = (await response.json()) as Partial<Snapshot> & { error?: string };
       if (!response.ok) throw new Error(data.error || "暂时无法连接现场");
       setSnapshot(normalizeSnapshot(data));
@@ -102,13 +104,26 @@ function useSnapshot(participantId: string, endpoint = "/api/event", questionInd
   }, [endpoint, participantId, questionIndex]);
 
   useEffect(() => {
+    // The old 1.2s loop made every open phone and the host hit CloudBase
+    // continuously. Keep the host responsive, but let participant pages
+    // settle into a much lighter rhythm and pause while they are hidden.
+    const intervalMs = endpoint === "/api/host-action" ? 4000 : 15000;
     const initial = window.setTimeout(() => void refresh(), 0);
-    const timer = window.setInterval(() => void refresh(), 1200);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refresh();
+    }, intervalMs);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
     return () => {
       window.clearTimeout(initial);
       window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
     };
-  }, [refresh]);
+  }, [endpoint, refresh]);
 
   return { snapshot, setSnapshot, error, ready, refresh };
 }
@@ -150,6 +165,7 @@ function Landing() {
       <div className="desktop-icons" aria-label="快速入口">
         <a href="/join" className="desktop-icon"><span className="pixel-icon">✎</span><span>加入讨论</span></a>
         <a href="/host" className="desktop-icon"><span className="pixel-icon">▣</span><span>主持展示</span></a>
+        <a href="/archive" className="desktop-icon"><span className="pixel-icon">▤</span><span>历史回答</span></a>
         <a href="#questions" className="desktop-icon"><span className="pixel-icon">?</span><span>十个问题</span></a>
       </div>
 
@@ -167,6 +183,7 @@ function Landing() {
           <div className="hero-actions">
             <a className="os-button primary" href="/join">✎ 我来回答</a>
             <a className="os-button" href="/host">▣ 打开主持屏</a>
+            <a className="os-button" href="/archive">▤ 查看历史回答</a>
           </div>
           <p className="hero-note">先让观点出现，再决定哪些人需要说话。</p>
         </div>

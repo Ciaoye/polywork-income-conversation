@@ -26,8 +26,17 @@ const headers = {
   "content-type": "application/json; charset=utf-8",
 };
 
-function reply(statusCode, value) {
-  return { statusCode, headers, body: JSON.stringify(value), isBase64Encoded: false };
+// GET snapshots are safe to cache briefly: they contain only the current
+// question and anonymous answers, while POST responses always return fresh
+// data. This lets the gateway/browser coalesce bursts instead of invoking the
+// function for every identical read.
+const snapshotHeaders = {
+  ...headers,
+  "cache-control": "public, max-age=2, stale-while-revalidate=8",
+};
+
+function reply(statusCode, value, responseHeaders = headers) {
+  return { statusCode, headers: responseHeaders, body: JSON.stringify(value), isBase64Encoded: false };
 }
 
 function first(result) {
@@ -210,7 +219,7 @@ exports.main = async (event) => {
   try {
     if (method === "GET") {
       const query = event.queryStringParameters || {};
-      return reply(200, await snapshot(String(query.participant || ""), query.question));
+      return reply(200, await snapshot(String(query.participant || ""), query.question), snapshotHeaders);
     }
     if (method === "POST") return await act(parseBody(event));
     return reply(405, { error: "不支持的请求方式" });
