@@ -23,6 +23,7 @@ npm run dev
 历史档案公网入口：
 
 - `https://agent2026-d5goi0noda51a261b-1446728973.tcloudbaseapp.com/polywork/`
+- GitHub Pages：`https://ciaoye.github.io/polywork-income-conversation/`
 
 当前页面只读，不需要连接同一个 Wi-Fi，也不会调用腾讯云接口。
 
