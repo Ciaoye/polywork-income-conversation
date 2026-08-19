@@ -104,26 +104,13 @@ function useSnapshot(participantId: string, endpoint = "/api/event", questionInd
   }, [endpoint, participantId, questionIndex]);
 
   useEffect(() => {
-    // The old 1.2s loop made every open phone and the host hit CloudBase
-    // continuously. Keep the host responsive, but let participant pages
-    // settle into a much lighter rhythm and pause while they are hidden.
-    const intervalMs = endpoint === "/api/host-action" ? 4000 : 15000;
+    // The activity is now archived. Read once on entry; subsequent reads are
+    // explicit so an open tab never creates background CloudBase traffic.
     const initial = window.setTimeout(() => void refresh(), 0);
-    const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible") void refresh();
-    }, intervalMs);
-    const onVisible = () => {
-      if (document.visibilityState === "visible") void refresh();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", onVisible);
     return () => {
       window.clearTimeout(initial);
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", onVisible);
     };
-  }, [endpoint, refresh]);
+  }, [refresh]);
 
   return { snapshot, setSnapshot, error, ready, refresh };
 }
@@ -313,7 +300,7 @@ function SpectrumSummary({ responses }: { responses: EventResponse[] }) {
 function Participant() {
   const [participantId] = useState(getParticipantId);
   const [selectedQuestion, setSelectedQuestion] = useState<number | undefined>(undefined);
-  const { snapshot, setSnapshot, error, ready } = useSnapshot(participantId, participantApiEndpoint(), selectedQuestion);
+  const { snapshot, setSnapshot, error, ready, refresh } = useSnapshot(participantId, participantApiEndpoint(), selectedQuestion);
   const [form, setForm] = useState<AnswerData>(initialData(snapshot.question));
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -356,7 +343,10 @@ function Participant() {
         <header className="mobile-header">
           <a href="/" aria-label="返回活动首页">✦</a>
           <div><b>共同回答</b><span>我在第 {snapshot.questionIndex + 1} 题 / 共 {snapshot.totalQuestions} 题</span></div>
-          <span className={`live-pill ${error ? "offline" : ""}`}>{error ? "重连中" : "LIVE"}</span>
+          <div className="participant-header-actions">
+            <span className={`live-pill ${error ? "offline" : ""}`}>{error ? "读取失败" : "已读取"}</span>
+            <button className="refresh-button" type="button" onClick={() => void refresh()}>刷新</button>
+          </div>
         </header>
         <div className="progress-track"><span style={{ width: `${((snapshot.questionIndex + 1) / snapshot.totalQuestions) * 100}%` }} /></div>
         {!ready ? <div className="connecting win-outset">正在进入现场……</div> : <>
@@ -447,7 +437,7 @@ function QuestionFields({ question, form, setForm }: { question: Question; form:
 }
 
 function Host() {
-  const { snapshot, setSnapshot, error, ready } = useSnapshot("host", "/api/host-action");
+  const { snapshot, setSnapshot, error, ready, refresh } = useSnapshot("host", "/api/host-action");
   const [showHome, setShowHome] = useState(true);
   const [qr, setQr] = useState("");
   const [joinUrl, setJoinUrl] = useState("");
@@ -495,8 +485,9 @@ function Host() {
       <div className="host-layout">
         <section className="host-stage">
           <div className="host-topline">
-            <span className={`live-pill ${error ? "offline" : ""}`}>{error ? "连接中断" : "现场同步中"}</span>
+            <span className={`live-pill ${error ? "offline" : ""}`}>{error ? "读取失败" : "手动读取"}</span>
             <span>{showHome ? "先从我们为什么来到这里开始" : `${visibleResponses.length} 人已经回答`}</span>
+            <button className="text-button" onClick={() => void refresh()}>刷新现场 ↻</button>
             <button className="text-button" onClick={() => document.documentElement.requestFullscreen?.()}>全屏展示 ↗</button>
           </div>
           {showHome ? <section className="host-home">

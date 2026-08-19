@@ -85,6 +85,7 @@ button:focus-visible, a:focus-visible, textarea:focus-visible, input:focus-visib
 .mobile-header { position: sticky; z-index: 30; top: 0; height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; background: #251441; color: white; }
 .mobile-header > a { width: 34px; height: 34px; display: grid; place-items: center; color: white; text-decoration: none; background: #8a41ff; border: 1px solid #b89cff; }
 .mobile-header > div { display: flex; flex-direction: column; align-items: center; gap: 3px; }.mobile-header b { font-size: 14px; }.mobile-header div span { font-size: 10px; opacity: .7; }
+.participant-header-actions { display: flex; align-items: center; gap: 6px; }.refresh-button { min-height: 28px; padding: 4px 7px; color: white; background: #6e2db4; border: 1px solid #b99afb; cursor: pointer; font-size: 10px; }.refresh-button:active { background: #4d1f82; }
 .live-pill { display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px; color: #136d32; background: #d5ffdf; border: 1px solid #58bd72; font: 700 10px "Courier New", monospace; text-transform: uppercase; }
 .live-pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #25a94c; animation: pulse 1.8s infinite; }.live-pill.offline { color: #8a2929; background: #ffe0e0; border-color: #c97777; }.live-pill.offline::before { background: #c33; }
 @keyframes pulse { 50% { opacity: .25; } }
