@@ -27,6 +27,21 @@ type Snapshot = {
   responses: EventResponse[];
   joinUrl?: string;
 };
+type EventMode = "static" | "live";
+type ExportRow = {
+  _id: string;
+  kind: "state" | "response" | "reaction";
+  questionId?: string;
+  participantId?: string;
+  responseId?: string;
+  data?: AnswerData;
+  hidden?: boolean;
+  highlighted?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  activeQuestion?: number;
+  revealAnswers?: boolean;
+};
 
 const emptySnapshot: Snapshot = {
   state: { activeQuestion: 0, revealAnswers: true },
@@ -39,6 +54,7 @@ const emptySnapshot: Snapshot = {
 declare global {
   interface Window {
     __POLYWORK_API_URL__?: string;
+    __POLYWORK_STATIC_DATA_URL__?: string;
   }
 }
 
@@ -58,6 +74,49 @@ function normalizeSnapshot(data: Partial<Snapshot>): Snapshot {
     totalQuestions: data.totalQuestions ?? questions.length,
     responses: data.responses ?? [],
   };
+}
+
+function staticDataEndpoint() {
+  if (typeof window === "undefined") return "/polywork-events.json";
+  return window.__POLYWORK_STATIC_DATA_URL__ || "/polywork-events.json";
+}
+
+function eventMode(): EventMode {
+  if (typeof window === "undefined") return "static";
+  return new URLSearchParams(window.location.search).get("mode") === "live" ? "live" : "static";
+}
+
+function staticSnapshot(text: string, participantId: string, requestedQuestion?: number): Snapshot {
+  const rows = text.split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as ExportRow);
+  const savedState = rows.find((row) => row.kind === "state");
+  const activeQuestion = Math.max(0, Math.min(questions.length - 1, Number(savedState?.activeQuestion ?? 0)));
+  const questionIndex = requestedQuestion === undefined
+    ? activeQuestion
+    : Math.max(0, Math.min(questions.length - 1, requestedQuestion));
+  const question = questions[questionIndex];
+  const reactionCount = new Map<string, number>();
+  const reacted = new Set<string>();
+  rows.filter((row) => row.kind === "reaction" && row.responseId).forEach((row) => {
+    reactionCount.set(row.responseId!, (reactionCount.get(row.responseId!) || 0) + 1);
+    if (row.participantId === participantId) reacted.add(row.responseId!);
+  });
+  return normalizeSnapshot({
+    state: { activeQuestion: questionIndex, revealAnswers: savedState?.revealAnswers !== false, updatedAt: savedState?.updatedAt },
+    questionIndex,
+    question,
+    totalQuestions: questions.length,
+    responses: rows.filter((row) => row.kind === "response" && row.questionId === question.id && row.data).map((row) => ({
+      id: row._id,
+      questionId: row.questionId!,
+      participantId: row.participantId || "",
+      data: row.data!,
+      hidden: Boolean(row.hidden),
+      highlighted: Boolean(row.highlighted),
+      reactionCount: reactionCount.get(row._id) || 0,
+      reacted: reacted.has(row._id),
+      updatedAt: row.updatedAt || row.createdAt || "",
+    })),
+  });
 }
 
 async function sendAction(payload: Record<string, unknown>) {
@@ -82,12 +141,20 @@ async function sendHostAction(payload: Record<string, unknown>) {
   return normalizeSnapshot(data);
 }
 
-function useSnapshot(participantId: string, endpoint = "/api/event", questionIndex?: number) {
+function useSnapshot(participantId: string, endpoint = "/api/event", questionIndex?: number, mode: EventMode = "live") {
   const [snapshot, setSnapshot] = useState<Snapshot>(emptySnapshot);
   const [error, setError] = useState("");
   const [ready, setReady] = useState(false);
   const refresh = useCallback(async () => {
     try {
+      if (mode === "static") {
+        const response = await fetch(staticDataEndpoint(), { cache: "force-cache" });
+        if (!response.ok) throw new Error("历史数据文件暂时无法读取");
+        setSnapshot(staticSnapshot(await response.text(), participantId, questionIndex));
+        setError("");
+        setReady(true);
+        return;
+      }
       const params = new URLSearchParams({ participant: participantId });
       if (questionIndex !== undefined) params.set("question", String(questionIndex));
       // Allow the short server/browser cache window to coalesce duplicate reads.
@@ -101,7 +168,7 @@ function useSnapshot(participantId: string, endpoint = "/api/event", questionInd
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "暂时无法连接现场");
     }
-  }, [endpoint, participantId, questionIndex]);
+  }, [endpoint, mode, participantId, questionIndex]);
 
   useEffect(() => {
     // The activity is now archived. Read once on entry; subsequent reads are
@@ -242,11 +309,12 @@ function ResponseContent({ response, question }: { response: EventResponse; ques
   return <p>{String(data.text || "")}</p>;
 }
 
-function ResponseCard({ response, question, participantId, host, onAction }: {
+function ResponseCard({ response, question, participantId, host, readOnly, onAction }: {
   response: EventResponse;
   question: Question;
   participantId: string;
   host?: boolean;
+  readOnly?: boolean;
   onAction: (payload: Record<string, unknown>) => Promise<void>;
 }) {
   const own = response.participantId === participantId;
@@ -258,12 +326,12 @@ function ResponseCard({ response, question, participantId, host, onAction }: {
       </div>
       <ResponseContent response={response} question={question} />
       <div className="card-actions">
-        {!host && !response.hidden ? (
+        {!host && !readOnly && !response.hidden ? (
           <button className={`listen-button ${response.reacted ? "active" : ""}`} onClick={() => onAction({ action: "react", responseId: response.id, participantId })}>
             ◉ 想听展开 <b>{response.reactionCount || ""}</b>
           </button>
         ) : null}
-        {host ? <>
+        {host && !readOnly ? <>
           <button className="tiny-button" onClick={() => onAction({ action: "moderate", responseId: response.id, field: "highlighted", value: !response.highlighted })}>{response.highlighted ? "取消高亮" : "高亮"}</button>
           <button className="tiny-button" onClick={() => onAction({ action: "moderate", responseId: response.id, field: "hidden", value: !response.hidden })}>{response.hidden ? "恢复" : "隐藏"}</button>
           <span className="host-votes">◉ {response.reactionCount}</span>
@@ -300,7 +368,8 @@ function SpectrumSummary({ responses }: { responses: EventResponse[] }) {
 function Participant() {
   const [participantId] = useState(getParticipantId);
   const [selectedQuestion, setSelectedQuestion] = useState<number | undefined>(undefined);
-  const { snapshot, setSnapshot, error, ready, refresh } = useSnapshot(participantId, participantApiEndpoint(), selectedQuestion);
+  const [mode] = useState<EventMode>(eventMode);
+  const { snapshot, setSnapshot, error, ready, refresh } = useSnapshot(participantId, participantApiEndpoint(), selectedQuestion, mode);
   const [form, setForm] = useState<AnswerData>(initialData(snapshot.question));
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -327,6 +396,7 @@ function Participant() {
   };
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (mode === "static") return;
     if (!participantId) return;
     setSaving(true);
     try {
@@ -374,18 +444,20 @@ function Participant() {
             <p className="short-intro">{snapshot.question.intro[0]}</p>
           </section>
           <form className="answer-form win-outset" onSubmit={submit}>
-            <div className="title-bar small"><strong>{saved ? "修改我的回答" : "写下我的回答"}</strong><span>匿名提交</span></div>
+            <div className="title-bar small"><strong>{mode === "static" ? "历史数据只读" : saved ? "修改我的回答" : "写下我的回答"}</strong><span>{mode === "static" ? "活动已结束" : "匿名提交"}</span></div>
             <div className="form-body">
-              <QuestionFields question={snapshot.question} form={form} setForm={setForm} />
-              <button className="os-button primary submit-button" disabled={saving}>{saving ? "正在放到大屏幕……" : saved ? "保存修改" : "匿名提交"}</button>
-              {saved ? <p className="saved-note">✓ 已经出现在现场。你可以继续修改。</p> : null}
+              <fieldset disabled={mode === "static"} className="static-fieldset">
+                <QuestionFields question={snapshot.question} form={form} setForm={setForm} />
+                <button className="os-button primary submit-button" disabled={saving || mode === "static"}>{mode === "static" ? "活动已结束" : saving ? "正在放到大屏幕……" : saved ? "保存修改" : "匿名提交"}</button>
+              </fieldset>
+              {mode === "static" ? <p className="saved-note static-note">这是活动结束后的历史档案，当前不接受新回答。</p> : saved ? <p className="saved-note">✓ 已经出现在现场。你可以继续修改。</p> : null}
             </div>
           </form>
           <section className="others-section">
             <div className="section-heading"><div><span>COLLECTIVE RESPONSES</span><h2>大家正在怎么想</h2></div><b>{snapshot.responses.filter((response) => !response.hidden).length} 条</b></div>
             {!snapshot.state.revealAnswers ? <div className="answers-closed win-inset">主持人暂时收起了回答。<br />先留一点安静思考的时间。</div> :
               <div className="response-grid participant-grid">
-                {snapshot.responses.filter((response) => !response.hidden).map((response) => <ResponseCard key={response.id} response={response} question={snapshot.question} participantId={participantId} onAction={act} />)}
+                {snapshot.responses.filter((response) => !response.hidden).map((response) => <ResponseCard key={response.id} response={response} question={snapshot.question} participantId={participantId} readOnly={mode === "static"} onAction={act} />)}
                 {!snapshot.responses.some((response) => !response.hidden) ? <p className="empty-copy">这里还是空的。也许你会写下第一句。</p> : null}
               </div>}
           </section>
@@ -437,7 +509,9 @@ function QuestionFields({ question, form, setForm }: { question: Question; form:
 }
 
 function Host() {
-  const { snapshot, setSnapshot, error, ready, refresh } = useSnapshot("host", "/api/host-action");
+  const [mode] = useState<EventMode>(eventMode);
+  const [hostQuestionIndex, setHostQuestionIndex] = useState<number | undefined>(undefined);
+  const { snapshot, setSnapshot, error, ready, refresh } = useSnapshot("host", "/api/host-action", hostQuestionIndex, mode);
   const [showHome, setShowHome] = useState(true);
   const [qr, setQr] = useState("");
   const [joinUrl, setJoinUrl] = useState("");
@@ -452,6 +526,7 @@ function Host() {
     void QRCode.toDataURL(joinUrl, { width: 260, margin: 1, color: { dark: "#271744", light: "#ffffff" } }).then(setQr);
   }, [joinUrl]);
   const act = async (payload: Record<string, unknown>) => {
+    if (mode === "static") return;
     try {
       setSnapshot(await sendHostAction(payload));
       setHostError("");
@@ -461,6 +536,10 @@ function Host() {
   };
   const goToQuestion = async (index: number) => {
     setShowHome(false);
+    if (mode === "static") {
+      setHostQuestionIndex(index);
+      return;
+    }
     await act({ action: "setQuestion", index });
   };
   const goPrevious = async () => {
@@ -485,7 +564,7 @@ function Host() {
       <div className="host-layout">
         <section className="host-stage">
           <div className="host-topline">
-            <span className={`live-pill ${error ? "offline" : ""}`}>{error ? "读取失败" : "手动读取"}</span>
+            <span className={`live-pill ${error ? "offline" : ""}`}>{error ? "读取失败" : mode === "static" ? "历史只读" : "手动读取"}</span>
             <span>{showHome ? "先从我们为什么来到这里开始" : `${visibleResponses.length} 人已经回答`}</span>
             <button className="text-button" onClick={() => void refresh()}>刷新现场 ↻</button>
             <button className="text-button" onClick={() => document.documentElement.requestFullscreen?.()}>全屏展示 ↗</button>
@@ -516,7 +595,7 @@ function Host() {
                 {snapshot.question.type === "spectrum" ? <SpectrumSummary responses={snapshot.responses} /> : null}
                 {snapshot.question.type === "poll" || snapshot.question.type === "value" ? <PollSummary question={snapshot.question} responses={snapshot.responses} /> : null}
                 <div className="response-grid host-grid">
-                  {snapshot.responses.map((response) => <ResponseCard key={response.id} response={response} question={snapshot.question} participantId="host" host onAction={act} />)}
+                  {snapshot.responses.map((response) => <ResponseCard key={response.id} response={response} question={snapshot.question} participantId="host" host readOnly={mode === "static"} onAction={act} />)}
                   {!snapshot.responses.length ? <div className="empty-stage">等待第一条回答<span className="blink-cursor">▮</span></div> : null}
                 </div>
               </>}
@@ -527,10 +606,12 @@ function Host() {
         <aside className="host-sidebar">
           <WindowFrame title="主持控制台">
             <div className="control-body">
-              <div className="qr-block win-inset">{qr ? <img src={qr} alt={`参与者入口二维码：${joinUrl}`} width={174} height={174} /> : null}</div>
-              <p className="join-label">扫码加入 · 无需注册</p>
-              <input className="join-url-input win-inset" aria-label="参与者网址" value={joinUrl} onChange={(event) => setJoinUrl(event.target.value)} />
-              {joinUrl.includes("localhost") ? <p className="network-warning">手机无法打开 localhost。现场使用时，请把这里换成这台电脑的局域网网址。</p> : null}
+              <div className="qr-block win-inset">{mode === "static" ? <span className="static-qr-label">历史档案<br />只读展示</span> : qr ? <img src={qr} alt={`参与者入口二维码：${joinUrl}`} width={174} height={174} /> : null}</div>
+              <p className="join-label">{mode === "static" ? "活动已结束 · 不接受新回答" : "扫码加入 · 无需注册"}</p>
+              {mode === "live" ? <>
+                <input className="join-url-input win-inset" aria-label="参与者网址" value={joinUrl} onChange={(event) => setJoinUrl(event.target.value)} />
+                {joinUrl.includes("localhost") ? <p className="network-warning">手机无法打开 localhost。现场使用时，请把这里换成这台电脑的局域网网址。</p> : null}
+              </> : <p className="static-mode-note">当前页面只读取项目中保存的现场数据，不会访问腾讯云。</p>}
               <div className="control-divider" />
               <p className="control-label">当前问题</p>
               <div className="question-picker">
@@ -541,7 +622,7 @@ function Host() {
                 <button className="os-button" disabled={showHome} onClick={() => void goPrevious()}>← {snapshot.state.activeQuestion === 0 ? "回首页" : "上一题"}</button>
                 <button className="os-button primary" disabled={!showHome && snapshot.state.activeQuestion === snapshot.totalQuestions - 1} onClick={() => void goNext()}>{showHome ? "开始 →" : "下一题 →"}</button>
               </div>
-              {!showHome ? <button className="os-button wide-button" onClick={() => act({ action: "setReveal", value: !snapshot.state.revealAnswers })}>{snapshot.state.revealAnswers ? "◉ 暂时收起所有回答" : "◎ 展示所有回答"}</button> : null}
+              {!showHome && mode === "live" ? <button className="os-button wide-button" onClick={() => act({ action: "setReveal", value: !snapshot.state.revealAnswers })}>{snapshot.state.revealAnswers ? "◉ 暂时收起所有回答" : "◎ 展示所有回答"}</button> : null}
               {hostError ? <p className="host-error">{hostError}</p> : null}
               <div className="control-divider" />
               <details className="discussion-prompts" open>
@@ -552,7 +633,7 @@ function Host() {
                   <li>先让观点出现，再邀请愿意的人把某条回答展开。</li>
                 </> : snapshot.question.discussion.map((item) => <li key={item}>{item}</li>)}</ul>
               </details>
-              {!ready ? <p className="control-status">正在准备现场数据……</p> : <p className="control-status">✓ {showHome ? "准备好后，从第 01 题开始" : "参与者可自由选择题目"}</p>}
+              {!ready ? <p className="control-status">正在准备现场数据……</p> : <p className="control-status">✓ {mode === "static" ? "当前是历史数据只读模式" : showHome ? "准备好后，从第 01 题开始" : "参与者可自由选择题目"}</p>}
             </div>
           </WindowFrame>
         </aside>

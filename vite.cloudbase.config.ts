@@ -4,6 +4,7 @@ import { defineConfig } from "vite";
 export default defineConfig({
   root: "cloudbase-web",
   base: "/polywork/",
+  publicDir: "../public",
   plugins: [react()],
   build: {
     outDir: "../cloudbase-dist",
