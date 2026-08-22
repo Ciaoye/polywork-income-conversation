@@ -143,7 +143,7 @@ export default function ArchiveApp() {
               {displayedResponses.map((row) => <article className={`archive-response ${row.highlighted ? "is-highlighted" : ""}`} key={row._id}>
                 <div className="archive-response-meta"><span>{row.highlighted ? "★ 现场高亮" : "匿名回答"}</span><span>{formatDate(row.createdAt)}</span></div>
                 <p>{responseText(question, row.data!)}</p>
-                <div className="archive-response-foot"><span>◉ {reactions.get(row._id) || 0} 次回应</span><span>{row.updatedAt && row.updatedAt !== row.createdAt ? "有过修改" : ""}</span></div>
+                <div className="archive-response-foot"><span>◉ {reactions.get(row._id) || 0} 次回应</span></div>
               </article>)}
               {!questionResponses.length ? <p className="archive-empty">没有匹配的回答。</p> : null}
             </div>
