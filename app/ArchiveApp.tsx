@@ -45,6 +45,30 @@ function formatDate(value?: string) {
   return new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }
 
+function ArchivePollSummary({ question, rows }: { question: Question; rows: ArchiveRow[] }) {
+  const key = question.type === "value" ? "ai" : "choice";
+  const options = question.options ?? [];
+  const visible = rows.filter((row) => !row.hidden);
+  const counts = options.map((option) => visible.filter((row) => row.data![key] === option).length);
+  const max = Math.max(...counts, 1);
+  return <div className="poll-summary">{options.map((option, index) => <div className="poll-row" key={option}>
+    <div className="poll-label"><span>{option}</span><b>{counts[index]}</b></div>
+    <div className="poll-track win-inset"><span style={{ width: `${(counts[index] / max) * 100}%` }} /></div>
+  </div>)}</div>;
+}
+
+function ArchiveSpectrumSummary({ rows }: { rows: ArchiveRow[] }) {
+  const visible = rows.filter((row) => !row.hidden);
+  const average = visible.length ? Math.round(visible.reduce((sum, row) => sum + Number(row.data!.value || 0), 0) / visible.length) : 0;
+  return <div className="spectrum-summary">
+    <div className="spectrum-labels"><span>被逼无奈</span><span>主动选择</span></div>
+    <div className="spectrum-line win-inset">
+      {visible.map((row, index) => <span className="spectrum-dot" key={row._id} style={{ left: `${Number(row.data!.value) || 0}%`, top: `${8 + (index % 3) * 19}px` }} title={String(row.data!.value)} />)}
+    </div>
+    <p>{visible.length ? `现场平均位置：${average} / 100` : "还没有人放下自己的位置"}</p>
+  </div>;
+}
+
 export default function ArchiveApp() {
   const [rows, setRows] = useState<ArchiveRow[]>([]);
   const [selected, setSelected] = useState("all");
@@ -155,6 +179,8 @@ export default function ArchiveApp() {
               <summary>这个问题还可以怎么继续聊</summary>
               <ul>{question.discussion.map((item) => <li key={item}>{item}</li>)}</ul>
             </details>
+            {question.type === "spectrum" ? <ArchiveSpectrumSummary rows={questionResponses} /> : null}
+            {question.type === "poll" || question.type === "value" ? <ArchivePollSummary question={question} rows={questionResponses} /> : null}
             <div className="archive-response-grid">
               {distributeColumns(displayedResponses).map((columnItems, columnIndex) => <div className="archive-response-col" key={columnIndex}>
                 {columnItems.map((row) => <article className={`archive-response ${row.highlighted ? "is-highlighted" : ""}`} key={row._id}>

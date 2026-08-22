@@ -518,6 +518,16 @@ function Host() {
   const [qr, setQr] = useState("");
   const [joinUrl, setJoinUrl] = useState("");
   const [hostError, setHostError] = useState("");
+  const [cols, setCols] = useState(3);
+  useEffect(() => {
+    const update = () => {
+      const width = window.innerWidth;
+      setCols(width <= 640 ? 1 : width <= 980 ? 2 : 3);
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
   useEffect(() => {
     if (!snapshot.joinUrl) return;
     const timer = window.setTimeout(() => setJoinUrl(snapshot.joinUrl ?? ""), 0);
@@ -560,6 +570,11 @@ function Host() {
     await goToQuestion(snapshot.state.activeQuestion + 1);
   };
   const visibleResponses = useMemo(() => snapshot.responses.filter((response) => !response.hidden), [snapshot.responses]);
+  const distributeColumns = (items: EventResponse[]) => {
+    const buckets: EventResponse[][] = Array.from({ length: cols }, () => []);
+    items.forEach((item, index) => buckets[index % cols].push(item));
+    return buckets;
+  };
 
   return (
     <main className="desktop host-desktop">
@@ -597,7 +612,9 @@ function Host() {
                 {snapshot.question.type === "spectrum" ? <SpectrumSummary responses={snapshot.responses} /> : null}
                 {snapshot.question.type === "poll" || snapshot.question.type === "value" ? <PollSummary question={snapshot.question} responses={snapshot.responses} /> : null}
                 <div className="response-grid host-grid">
-                  {snapshot.responses.map((response) => <ResponseCard key={response.id} response={response} question={snapshot.question} participantId="host" host readOnly={mode === "static"} onAction={act} />)}
+                  {distributeColumns(snapshot.responses).map((columnItems, columnIndex) => <div className="host-col" key={columnIndex}>
+                    {columnItems.map((response) => <ResponseCard key={response.id} response={response} question={snapshot.question} participantId="host" host readOnly={mode === "static"} onAction={act} />)}
+                  </div>)}
                   {!snapshot.responses.length ? <div className="empty-stage">等待第一条回答<span className="blink-cursor">▮</span></div> : null}
                 </div>
               </>}
