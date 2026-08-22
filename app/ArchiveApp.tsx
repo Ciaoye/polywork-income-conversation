@@ -51,6 +51,7 @@ export default function ArchiveApp() {
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
   const [expandedQuestions, setExpandedQuestions] = useState<Record<string, boolean>>({});
+  const [cols, setCols] = useState(3);
 
   useEffect(() => {
     fetch(typeof window === "undefined" ? "/polywork-events.json" : (window.__POLYWORK_STATIC_DATA_URL__ || sitePath("/polywork-events.json")))
@@ -66,6 +67,16 @@ export default function ArchiveApp() {
       .catch((reason) => setError(reason instanceof Error ? reason.message : "历史数据暂时无法读取"));
   }, []);
 
+  useEffect(() => {
+    const update = () => {
+      const width = window.innerWidth;
+      setCols(width <= 640 ? 1 : width <= 980 ? 2 : 3);
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
   const responses = useMemo(() => rows.filter((row) => row.kind === "response" && row.questionId && row.data), [rows]);
   const reactions = useMemo(() => {
     const counts = new Map<string, number>();
@@ -76,6 +87,11 @@ export default function ArchiveApp() {
   const visibleQuestions = selected === "all" ? questions : questions.filter((question) => question.id === selected);
   const query = search.trim().toLowerCase();
   const matches = (row: ArchiveRow) => !query || responseText(questions.find((question) => question.id === row.questionId)!, row.data!).toLowerCase().includes(query);
+  const distributeColumns = (items: ArchiveRow[]) => {
+    const buckets: ArchiveRow[][] = Array.from({ length: cols }, () => []);
+    items.forEach((item, index) => buckets[index % cols].push(item));
+    return buckets;
+  };
 
   return (
     <main className="archive-page">
@@ -140,11 +156,13 @@ export default function ArchiveApp() {
               <ul>{question.discussion.map((item) => <li key={item}>{item}</li>)}</ul>
             </details>
             <div className="archive-response-grid">
-              {displayedResponses.map((row) => <article className={`archive-response ${row.highlighted ? "is-highlighted" : ""}`} key={row._id}>
-                <div className="archive-response-meta"><span>{row.highlighted ? "★ 现场高亮" : "匿名回答"}</span><span>{formatDate(row.createdAt)}</span></div>
-                <p>{responseText(question, row.data!)}</p>
-                <div className="archive-response-foot"><span>◉ {reactions.get(row._id) || 0} 次回应</span></div>
-              </article>)}
+              {distributeColumns(displayedResponses).map((columnItems, columnIndex) => <div className="archive-response-col" key={columnIndex}>
+                {columnItems.map((row) => <article className={`archive-response ${row.highlighted ? "is-highlighted" : ""}`} key={row._id}>
+                  <div className="archive-response-meta"><span>{row.highlighted ? "★ 现场高亮" : "匿名回答"}</span><span>{formatDate(row.createdAt)}</span></div>
+                  <p>{responseText(question, row.data!)}</p>
+                  <div className="archive-response-foot"><span>◉ {reactions.get(row._id) || 0} 次回应</span></div>
+                </article>)}
+              </div>)}
               {!questionResponses.length ? <p className="archive-empty">没有匹配的回答。</p> : null}
             </div>
             {orderedResponses.length > 6 ? <button className="archive-more-button" type="button" onClick={() => setExpandedQuestions((current) => ({ ...current, [question.id]: !expanded }))}>{expanded ? "收起回答 ↑" : `查看更多（还有 ${orderedResponses.length - 6} 条） ↓`}</button> : null}
