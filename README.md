@@ -27,7 +27,8 @@ npm run dev
 
 历史档案展厅：
 
-- GitHub Pages：`https://ciaoye.github.io/polywork-income-conversation/`
+- GitHub Pages 实时参与者端：`https://ciaoye.github.io/polywork/`
+- GitHub Pages 历史回答：`https://ciaoye.github.io/polywork/archive/`
 
 参与者端不需要连接同一个 Wi-Fi。GitHub Pages 版本不会调用腾讯云，腾讯云参与者入口会读取现有回答并接受新的回答提交。
 
