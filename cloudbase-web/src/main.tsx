@@ -18,6 +18,7 @@ function App() {
   if (route === "/archive") return <ArchiveApp />;
   if (route === "/host") return <EventApp mode="host" />;
   if (route === "/join") return <EventApp mode="participant" />;
+  if (route === "" && window.__POLYWORK_DEFAULT_PARTICIPANT_MODE__ === "live") return <EventApp mode="participant" />;
   return <EventApp mode="landing" />;
 }
 
