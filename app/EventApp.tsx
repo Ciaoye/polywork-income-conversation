@@ -57,6 +57,7 @@ declare global {
     __POLYWORK_API_URL__?: string;
     __POLYWORK_STATIC_DATA_URL__?: string;
     __POLYWORK_BASE_URL__?: string;
+    __POLYWORK_DEFAULT_PARTICIPANT_MODE__?: EventMode;
   }
 }
 
@@ -83,9 +84,13 @@ function staticDataEndpoint() {
   return window.__POLYWORK_STATIC_DATA_URL__ || "/polywork-events.json";
 }
 
-function eventMode(): EventMode {
+function eventMode(scope: "participant" | "host"): EventMode {
   if (typeof window === "undefined") return "static";
-  return new URLSearchParams(window.location.search).get("mode") === "live" ? "live" : "static";
+  const requested = new URLSearchParams(window.location.search).get("mode");
+  if (requested === "live") return "live";
+  if (requested === "static") return "static";
+  if (scope === "participant" && window.__POLYWORK_DEFAULT_PARTICIPANT_MODE__ === "live") return "live";
+  return "static";
 }
 
 function staticSnapshot(text: string, participantId: string, requestedQuestion?: number): Snapshot {
@@ -370,7 +375,7 @@ function SpectrumSummary({ responses }: { responses: EventResponse[] }) {
 function Participant() {
   const [participantId] = useState(getParticipantId);
   const [selectedQuestion, setSelectedQuestion] = useState<number | undefined>(undefined);
-  const [mode] = useState<EventMode>(eventMode);
+  const [mode] = useState<EventMode>(() => eventMode("participant"));
   const { snapshot, setSnapshot, error, ready, refresh } = useSnapshot(participantId, participantApiEndpoint(), selectedQuestion, mode);
   const [form, setForm] = useState<AnswerData>(initialData(snapshot.question));
   const [saving, setSaving] = useState(false);
@@ -511,7 +516,7 @@ function QuestionFields({ question, form, setForm }: { question: Question; form:
 }
 
 function Host() {
-  const [mode] = useState<EventMode>(eventMode);
+  const [mode] = useState<EventMode>(() => eventMode("host"));
   const [hostQuestionIndex, setHostQuestionIndex] = useState<number | undefined>(undefined);
   const { snapshot, setSnapshot, error, ready, refresh } = useSnapshot("host", "/api/host-action", hostQuestionIndex, mode);
   const [showHome, setShowHome] = useState(true);

@@ -9,6 +9,7 @@ import "../../app/globals.css";
 window.__POLYWORK_API_URL__ = import.meta.env.VITE_POLYWORK_API_URL;
 window.__POLYWORK_STATIC_DATA_URL__ = `${import.meta.env.BASE_URL}polywork-events.json`;
 window.__POLYWORK_BASE_URL__ = import.meta.env.BASE_URL;
+window.__POLYWORK_DEFAULT_PARTICIPANT_MODE__ = import.meta.env.VITE_POLYWORK_DEFAULT_PARTICIPANT_MODE === "live" ? "live" : "static";
 
 function App() {
   const base = import.meta.env.BASE_URL.replace(/\/$/, "");
