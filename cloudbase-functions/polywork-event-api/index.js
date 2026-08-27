@@ -17,6 +17,7 @@ const questionIds = [
   "enough",
   "new-default",
 ];
+const MIN_ANSWER_LENGTH = 15;
 
 const headers = {
   "access-control-allow-origin": "*",
@@ -68,6 +69,20 @@ function parseBody(event) {
   return JSON.parse(source || "{}");
 }
 
+function answerText(questionId, data) {
+  const value = data && typeof data === "object" ? data : {};
+  if (questionId === "body-memory") return `${value.comfortable || ""} ${value.tired || ""}`;
+  if (questionId === "earning-story") return `${value.story || ""} ${value.amount || ""}`;
+  if (questionId === "choice-spectrum") return String(value.reason || "");
+  if (questionId === "one-year-buffer") return String(value.note || "");
+  if (questionId === "valuable-thing") return String(value.value || "");
+  return String(value.text || "");
+}
+
+function hasMinimumAnswer(questionId, data) {
+  return Array.from(answerText(questionId, data).replace(/\s/g, "").trim()).length >= MIN_ANSWER_LENGTH;
+}
+
 async function getState() {
   const result = await collection.doc("state").get();
   const current = first(result);
@@ -110,6 +125,8 @@ async function snapshot(participantId, requestedQuestion) {
       reacted: reacted.has(response._id),
       updatedAt: response.updatedAt,
     }));
+  const ownResponse = responses.find((response) => response.participantId === participantId);
+  const isHost = participantId === "host";
   return {
     state: {
       activeQuestion: boundedQuestion(state.activeQuestion),
@@ -118,7 +135,9 @@ async function snapshot(participantId, requestedQuestion) {
     },
     questionIndex,
     totalQuestions: questionIds.length,
-    responses,
+    responses: isHost || hasMinimumAnswer(questionId, ownResponse?.data)
+      ? responses
+      : responses.filter((response) => response.participantId === participantId),
     joinUrl: process.env.PARTICIPANT_JOIN_URL || "",
   };
 }
@@ -141,6 +160,9 @@ async function act(payload) {
     const questionId = String(payload.questionId || "");
     if (!participantId || !questionIds.includes(questionId) || typeof payload.data !== "object" || payload.data === null) {
       return reply(400, { error: "回答内容不完整" });
+    }
+    if (!hasMinimumAnswer(questionId, payload.data)) {
+      return reply(400, { error: `回答至少需要 ${MIN_ANSWER_LENGTH} 个字` });
     }
     const id = stableId(questionId, participantId);
     const existing = first(await collection.doc(id).get());

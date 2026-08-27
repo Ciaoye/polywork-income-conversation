@@ -44,6 +44,21 @@ type ExportRow = {
   revealAnswers?: boolean;
 };
 
+const MIN_ANSWER_LENGTH = 15;
+
+function answerText(question: Question, data: AnswerData) {
+  if (question.type === "dual") return `${data.comfortable || ""} ${data.tired || ""}`;
+  if (question.type === "earning") return `${data.story || ""} ${data.amount || ""}`;
+  if (question.type === "spectrum") return String(data.reason || "");
+  if (question.type === "poll") return String(data.note || "");
+  if (question.type === "value") return String(data.value || "");
+  return String(data.text || "");
+}
+
+function hasMinimumAnswer(question: Question, data?: AnswerData) {
+  return Boolean(data && Array.from(answerText(question, data).replace(/\s/g, "").trim()).length >= MIN_ANSWER_LENGTH);
+}
+
 const emptySnapshot: Snapshot = {
   state: { activeQuestion: 0, revealAnswers: true },
   question: questions[0],
@@ -380,8 +395,10 @@ function Participant() {
   const [form, setForm] = useState<AnswerData>(initialData(snapshot.question));
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [validationError, setValidationError] = useState("");
   const hydratedRef = useRef("");
   const own = snapshot.responses.find((response) => response.participantId === participantId);
+  const canSeeOthers = mode === "static" || hasMinimumAnswer(snapshot.question, own?.data);
 
   useEffect(() => {
     if (!ready || selectedQuestion !== undefined) return;
@@ -394,6 +411,7 @@ function Participant() {
     if (hydratedRef.current !== key) {
       setForm(own?.data ?? initialData(snapshot.question));
       setSaved(Boolean(own));
+      setValidationError("");
       hydratedRef.current = key;
     }
   }, [snapshot.question, own]);
@@ -405,10 +423,16 @@ function Participant() {
     event.preventDefault();
     if (mode === "static") return;
     if (!participantId) return;
+    if (!hasMinimumAnswer(snapshot.question, form)) {
+      setSaved(false);
+      setValidationError("请至少填写 15 个字，提交后才能看到大家的回答。");
+      return;
+    }
     setSaving(true);
     try {
       setSnapshot(await sendAction({ action: "submit", participantId, questionId: snapshot.question.id, data: form, viewQuestionIndex: snapshot.questionIndex }));
       setSaved(true);
+      setValidationError("");
     } finally {
       setSaving(false);
     }
@@ -451,18 +475,19 @@ function Participant() {
             <p className="short-intro">{snapshot.question.intro[0]}</p>
           </section>
           <form className="answer-form win-outset" onSubmit={submit}>
-            <div className="title-bar small"><strong>{mode === "static" ? "历史数据只读" : saved ? "修改我的回答" : "写下我的回答"}</strong><span>{mode === "static" ? "活动已结束" : "匿名提交"}</span></div>
+            <div className="title-bar small"><strong>{mode === "static" ? "历史数据只读" : saved ? "修改我的回答" : "写下我的回答"}</strong><span>{mode === "static" ? "活动已结束" : "匿名提交 · 至少 15 个字"}</span></div>
             <div className="form-body">
               <fieldset disabled={mode === "static"} className="static-fieldset">
                 <QuestionFields question={snapshot.question} form={form} setForm={setForm} />
                 <button className="os-button primary submit-button" disabled={saving || mode === "static"}>{mode === "static" ? "活动已结束" : saving ? "正在放到大屏幕……" : saved ? "保存修改" : "匿名提交"}</button>
               </fieldset>
               {mode === "static" ? <p className="saved-note static-note">这是活动结束后的历史档案，当前不接受新回答。</p> : saved ? <p className="saved-note">✓ 已经出现在现场。你可以继续修改。</p> : null}
+              {validationError ? <p className="saved-note validation-note">{validationError}</p> : null}
             </div>
           </form>
           <section className="others-section">
-            <div className="section-heading"><div><span>COLLECTIVE RESPONSES</span><h2>大家正在怎么想</h2></div><b>{snapshot.responses.filter((response) => !response.hidden).length} 条</b></div>
-            {!snapshot.state.revealAnswers ? <div className="answers-closed win-inset">主持人暂时收起了回答。<br />先留一点安静思考的时间。</div> :
+            <div className="section-heading"><div><span>COLLECTIVE RESPONSES</span><h2>大家正在怎么想</h2></div><b>{canSeeOthers ? snapshot.responses.filter((response) => !response.hidden).length : "—"}</b></div>
+            {!canSeeOthers ? <div className="answers-closed win-inset">先写下当前问题的回答，至少 15 个字并提交。<br />提交之后，就可以看到大家的回答。</div> : !snapshot.state.revealAnswers ? <div className="answers-closed win-inset">主持人暂时收起了回答。<br />先留一点安静思考的时间。</div> :
               <div className="response-grid participant-grid">
                 {snapshot.responses.filter((response) => !response.hidden).map((response) => <ResponseCard key={response.id} response={response} question={snapshot.question} participantId={participantId} readOnly={mode === "static"} onAction={act} />)}
                 {!snapshot.responses.some((response) => !response.hidden) ? <p className="empty-copy">这里还是空的。也许你会写下第一句。</p> : null}

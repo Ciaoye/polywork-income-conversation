@@ -13,7 +13,9 @@ if (!hostKey) throw new Error(".env 中缺少 HOST_KEY");
 const publicConfig = JSON.parse(await readFile(path.join(projectRoot, "cloudbaserc.json"), "utf8"));
 const secureConfig = {
   ...publicConfig,
-  functionRoot: path.join(projectRoot, "cloudbase-functions"),
+  // Keep this relative because the CloudBase CLI resolves functionRoot from
+  // the current project directory when a config file is passed explicitly.
+  functionRoot: "cloudbase-functions",
   functions: publicConfig.functions.map((fn) =>
     fn.name === "polywork-event-api"
       ? { ...fn, envVariables: { ...(fn.envVariables || {}), HOST_KEY: hostKey } }

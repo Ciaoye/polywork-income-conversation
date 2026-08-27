@@ -15,6 +15,20 @@ type ResponseRow = {
 };
 
 const HOST_ACTIONS = new Set(["setQuestion", "setReveal", "moderate"]);
+const MIN_ANSWER_LENGTH = 15;
+
+function answerText(questionId: string, data: Record<string, unknown>) {
+  if (questionId === "body-memory") return `${data.comfortable ?? ""} ${data.tired ?? ""}`;
+  if (questionId === "earning-story") return `${data.story ?? ""} ${data.amount ?? ""}`;
+  if (questionId === "choice-spectrum") return String(data.reason ?? "");
+  if (questionId === "one-year-buffer") return String(data.note ?? "");
+  if (questionId === "valuable-thing") return String(data.value ?? "");
+  return String(data.text ?? "");
+}
+
+function hasMinimumAnswer(questionId: string, data: Record<string, unknown>) {
+  return Array.from(answerText(questionId, data).replace(/\s/g, "").trim()).length >= MIN_ANSWER_LENGTH;
+}
 
 function hostKey() {
   return String((env as unknown as Record<string, unknown>).HOST_KEY ?? "");
@@ -83,12 +97,7 @@ async function snapshot(participantId = "", requestedQuestion?: number) {
     reacted = new Set(own.results.map((row) => row.response_id));
   }
 
-  return {
-    state: { activeQuestion, revealAnswers: Boolean(state?.reveal_answers), updatedAt: state?.updated_at },
-    questionIndex: index,
-    question,
-    totalQuestions: questions.length,
-    responses: result.results.map((row) => ({
+  const responses = result.results.map((row) => ({
       id: row.id,
       questionId: row.question_id,
       participantId: row.participant_id,
@@ -99,7 +108,17 @@ async function snapshot(participantId = "", requestedQuestion?: number) {
       updatedAt: row.updated_at,
       reactionCount: Number(row.reaction_count),
       reacted: reacted.has(row.id),
-    })),
+    }));
+  const ownResponse = responses.find((response) => response.participantId === participantId);
+  const isHost = participantId === "host";
+  return {
+    state: { activeQuestion, revealAnswers: Boolean(state?.reveal_answers), updatedAt: state?.updated_at },
+    questionIndex: index,
+    question,
+    totalQuestions: questions.length,
+    responses: isHost || hasMinimumAnswer(question.id, ownResponse?.data ?? {})
+      ? responses
+      : responses.filter((response) => response.participantId === participantId),
   };
 }
 
@@ -130,6 +149,9 @@ export async function POST(request: Request) {
       const questionId = String(body.questionId ?? "");
       if (!participantId || !questions.some((question) => question.id === questionId) || !body.data) {
         return Response.json({ error: "回答内容不完整" }, { status: 400 });
+      }
+      if (!hasMinimumAnswer(questionId, body.data as Record<string, unknown>)) {
+        return Response.json({ error: `回答至少需要 ${MIN_ANSWER_LENGTH} 个字` }, { status: 400 });
       }
       await database.prepare(`INSERT INTO responses (id, question_id, participant_id, data)
         VALUES (?, ?, ?, ?) ON CONFLICT(question_id, participant_id) DO UPDATE SET
